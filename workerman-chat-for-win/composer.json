@@ -1,0 +1,9 @@
+{
+    "name"  : "workerman/workerman-chat-for-win",
+    "keywords": ["distributed","chatroom"],
+    "homepage": "http://www.workerman.net",
+    "license" : "MIT",
+    "require": {
+        "workerman/gateway-worker-for-win" : ">=3.0.0"
+    }
+}

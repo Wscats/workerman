@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html ng-app="demo">
+
+	<head>
+		<meta charset="UTF-8">
+		<title></title>
+	</head>
+
+	<body>
+		<div ng-controller="indexCtrl">
+			<p>{{name}}</p>
+			<select ng-model="client_id">
+				<option value="{{key}}" ng-repeat="(key, value) in client_list">client_id:{{key}} client_name:{{value}}</option>
+			</select>
+			<input ng-model="content" />
+			<button ng-click="submit()">Ok</button>
+			<div ng-bind-html="html"></div>
+		</div>
+	</body>
+	<script src="angular.js"></script>
+	<script>
+		var app = angular.module("demo", []);
+		app.controller("indexCtrl", function($scope, $sce, $window) {
+			//说话列表
+			$scope.html = "";
+			//用户名
+			$scope.name = "";
+			//用户列表
+			$scope.client_list = {};
+			//提交消息
+			$scope.submit = function() {
+				ws.send('{"type":"say","to_client_id":"' + $scope.client_id + '","to_client_name":"' + $scope.client_list[$scope.client_id] + '","content":"' + $scope.content + '"}');
+			}
+			var ws;
+
+			function connect() {
+				// 创建websocket
+				ws = new WebSocket("ws://" + document.domain + ":7272");
+				// 当socket连接打开时，输入用户名
+				ws.onopen = function() {
+					if(!$scope.name) {
+						$scope.name = prompt('输入你的名字：', '');
+						if(!$scope.name || $scope.name == 'null') {
+							$scope.name = '游客';
+						}
+					}
+					var login_data = '{"type":"login","client_name":"' + $scope.name + '","room_id":"1"}';
+					console.log("websocket握手成功，发送登录数据:" + login_data);
+					ws.send(login_data);
+				};
+				// 当有消息时根据消息类型显示不同信息
+				ws.onmessage = function(e) {
+					//var data = eval("("+e.data+")");
+					var data = JSON.parse(e.data)
+						//console.log($scope.client_list)
+						//window.sessionStorage.setItem("client_list",e.data)
+						//查看返回是否有用户列表，因为pong时候这里会空
+					if(data.client_list) {
+						$scope.client_list = data.client_list;
+					} else {
+						$scope.client_list;
+					}
+					switch(data['type']) {
+						// 服务端ping客户端
+						case 'ping':
+							ws.send('{"type":"pong"}');
+							break;
+							// 登录 更新用户列
+						case 'say':
+							//{"type":"say","from_client_id":xxx,"to_client_id":"all/client_id","content":"xxx","time":"xxx"}
+							$scope.html = $scope.html + data['from_client_id'] + data['from_client_name'] + data['content'] + data['time'] + "<br />";
+							$scope.html = $sce.trustAsHtml($scope.html);
+							break;
+						case 'login':
+							//{"type":"login","client_id":xxx,"client_name":"xxx","client_list":"[...]","time":"xxx"}
+							$scope.html = $scope.html + data['client_id'] + '用户' + data['client_name'] + ' 加入了聊天室' + data['time'] + "<br />";
+							$scope.html = $sce.trustAsHtml($scope.html);
+							if(data['client_list']) {
+								$scope.client_list = data['client_list'];
+							} else {
+								$scope.client_list[data['client_id']] = data['client_name'];
+							}
+							console.log(data['client_name'] + "登录成功");
+							break;
+							// 用户退出 更新用户列表
+						case 'logout':
+							//{"type":"logout","client_id":xxx,"time":"xxx"}
+							$scope.html = $scope.html + data['from_client_id'] + data['from_client_name'] + data['from_client_name'] + ' 退出了' + data['time'];
+							$scope.html = $sce.trustAsHtml($scope.html);
+							delete $scope.client_list[data['from_client_id']];
+					}
+					$scope.$apply();
+				};
+				ws.onclose = function() {
+					console.log("连接关闭，定时重连");
+					connect();
+				};
+				ws.onerror = function() {
+					console.log("出现错误");
+				};
+			}
+			connect()
+		})
+	</script>
+
+</html>
